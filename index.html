@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- ALLOW HTTP TRAFFIC (Important for IPTV) -->
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests"> 
+    
+    <!-- PWA MANIFEST LINK -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#080810">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="WIE TV">
+    <link rel="apple-touch-icon" href="https://via.placeholder.com/192/00e600/ffffff?text=WIE">
+
+    <title>WIE TV</title>
+    <!-- LIBRARIES -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- VUE & FIREBASE -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        /* --- THEME --- */
+        :root {
+            --primary: #00e600;     
+            --bg-deep: #080810;     
+            --bg-card: #151520;
+            --text-main: #ffffff;
+            --rating-bg: #FFD700;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            padding-bottom: 90px;
+            user-select: none;
+        }
+
+        /* --- HEADER --- */
+        .app-header {
+            position: fixed; top: 0; left: 0; width: 100%; height: 60px;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 16px; z-index: 100;
+            background: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, transparent 100%);
+        }
+        .logo { font-size: 1.5rem; font-weight: 900; font-style: italic; letter-spacing: -1px; }
+        .logo span:first-child { color: var(--primary); } 
+        .logo span:last-child { color: white; }
+        
+        .header-icons { display: flex; gap: 18px; align-items: center; }
+        .icon-btn { position: relative; font-size: 1.3rem; color: white; cursor: pointer; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .notif-dot {
+            position: absolute; top: 0; right: 0;
+            width: 8px; height: 8px; background: red; border-radius: 50%; border: 1px solid white;
+        }
+
+        /* --- SEARCH PAGE --- */
+        .search-page {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-deep); z-index: 2000;
+            display: flex; flex-direction: column;
+            animation: slideIn 0.2s ease-out;
+        }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        .search-header {
+            height: 60px; display: flex; align-items: center; gap: 15px; padding: 0 15px;
+            border-bottom: 1px solid #222; background: #080810;
+        }
+        .search-input { flex: 1; background: transparent; border: none; color: white; font-size: 1rem; }
+        .search-grid {
+            padding: 15px; overflow-y: auto; flex: 1;
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+        }
+        .search-card {
+            border-radius: 6px; overflow: hidden; position: relative;
+            background: #222; aspect-ratio: 2/3;
+        }
+        .search-card img { width: 100%; height: 100%; object-fit: cover; }
+        .search-badge { position: absolute; top: 5px; right: 5px; font-size: 0.6rem; padding: 2px 4px; border-radius: 3px; font-weight: bold; color:white; background:rgba(0,0,0,0.7); }
+
+        /* --- HERO SLIDER --- */
+        .hero-slider { height: 55vh; width: 100%; position: relative; overflow: hidden; }
+        .slide-item {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-size: cover; background-position: center top;
+            transition: opacity 0.8s ease-in-out; opacity: 0;
+        }
+        .slide-item.active { opacity: 1; }
+        .hero-overlay {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(0deg, var(--bg-deep) 15%, rgba(0,0,0,0) 60%);
+            display: flex; flex-direction: column; justify-content: flex-end; padding: 20px;
+        }
+        .hero-cat-tag { color: var(--primary); font-weight: 800; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 5px; text-shadow: 1px 1px 2px black; }
+        .hero-title { font-size: 1.8rem; font-weight: 700; line-height: 1.2; margin-bottom: 12px; text-shadow: 2px 2px 5px black; }
+        .big-play-btn {
+            width: 50px; height: 50px; border-radius: 50%; background: var(--primary); border: none;
+            display: flex; justify-content: center; align-items: center; box-shadow: 0 0 15px rgba(0, 230, 0, 0.4);
+            cursor: pointer;
+        }
+        .dots-container { display: flex; gap: 5px; position: absolute; bottom: 15px; left: 20px; z-index: 10; }
+        .dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.3); transition: 0.3s; }
+        .dot.active { width: 18px; background: var(--primary); border-radius: 4px; }
+
+        /* --- RAILS & CARDS (Fixed Size) --- */
+        .section { margin-top: 25px; }
+        .section-header { padding: 0 16px 10px; display: flex; justify-content: space-between; align-items: center; }
+        .section-title { font-size: 1rem; font-weight: 700; border-left: 3px solid var(--primary); padding-left: 10px; }
+        .rail { display: flex; overflow-x: auto; padding: 0 16px 20px; gap: 10px; scroll-behavior: smooth; }
+        .rail::-webkit-scrollbar { display: none; }
+
+        .card-wrapper { flex: 0 0 105px; width: 105px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
+        .card-img-box { position: relative; width: 100%; height: 155px; border-radius: 6px; overflow: hidden; background: #222; }
+        .card-img-box img { width: 100%; height: 100%; object-fit: cover; }
+        .rating-badge { position: absolute; top: 6px; left: 6px; background: var(--rating-bg); color: black; font-size: 0.55rem; font-weight: 800; padding: 2px 5px; border-radius: 3px; display: flex; align-items: center; gap: 2px; }
+        .card-title { font-size: 0.75rem; color: #ddd; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .card-wide-wrapper { flex: 0 0 150px; display: flex; flex-direction: column; gap: 5px; cursor: pointer; }
+        .card-wide-box { width: 100%; height: 90px; border-radius: 6px; background: #1a1a2e; position: relative; border: 1px solid #333; overflow: hidden; }
+        .card-wide-box img { width: 100%; height: 100%; object-fit: contain; padding: 10px; }
+
+        /* --- BOTTOM NAV --- */
+        .bottom-nav {
+            position: fixed; bottom: 0; left: 0; width: 100%; height: 70px;
+            background: #080810; border-top: 1px solid #222;
+            display: flex; justify-content: space-around; align-items: center; z-index: 90;
+        }
+        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; color: #666; font-size: 0.65rem; transition: 0.3s; cursor: pointer; }
+        .nav-item.active { color: var(--primary); transform: translateY(-2px); }
+        .nav-item i { font-size: 1.2rem; }
+
+        /* --- DETAILS MODAL --- */
+        .full-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-deep); z-index: 3000; overflow-y: auto;
+        }
+        .placeholder-page { padding-top: 80px; text-align: center; color: #666; height: 100vh; }
+        
+        .episode-item {
+            background: #1a1a2e; margin-top: 10px; padding: 15px; 
+            border-radius: 8px; display: flex; align-items: center; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+
+    <!-- Loading -->
+    <div v-if="loading" style="position:fixed; inset:0; background:#080810; z-index:9999; display:flex; justify-content:center; align-items:center;">
+        <div class="logo" style="font-size:3rem"><span>WIE</span><span>TV</span></div>
+    </div>
+
+    <!-- MAIN APP HEADER -->
+    <header class="app-header" v-if="!searchOpen">
+        <div class="logo"><span>WIE</span><span>TV</span></div>
+        <div class="header-icons">
+            <i class="fa-brands fa-chromecast icon-btn" @click="triggerAndroid('cast')"></i>
+            <div class="icon-btn" @click="triggerAndroid('notification')">
+                <i class="fa-regular fa-bell"></i>
+                <div class="notif-dot" v-if="hasUpdate"></div>
+            </div>
+            <i class="fa-solid fa-magnifying-glass icon-btn" @click="searchOpen = true"></i>
+        </div>
+    </header>
+
+    <!-- FULL SCREEN SEARCH PAGE -->
+    <div class="search-page" v-if="searchOpen">
+        <div class="search-header">
+            <i class="fa-solid fa-arrow-left icon-btn" @click="searchOpen = false"></i>
+            <input type="text" class="search-input" v-model="searchQuery" placeholder="Search..." autofocus>
+        </div>
+        <div class="search-grid">
+            <div class="search-card" v-for="m in filteredMovies" :key="m.id" @click="openDetails(m)">
+                <img :src="m.poster_url" @error="imgError">
+            </div>
+            <div class="search-card" v-for="s in filteredSeries" :key="s.id" @click="openDetails(s)">
+                <img :src="s.poster_url" @error="imgError"><div class="search-badge">SERIES</div>
+            </div>
+            <div class="search-card" v-for="c in filteredChannels" :key="c.id" @click="playVideo(c.stream_url)">
+                <img :src="c.logo_url" style="object-fit:contain; padding:10px;" @error="imgError"><div class="search-badge" style="background:red;">LIVE</div>
+            </div>
+            <div class="search-card" v-for="p in filteredPlaylists" :key="p.id" @click="playPlaylist(p.url)">
+                <div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center;color:var(--primary);font-weight:bold;font-size:0.8rem">{{ p.name }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div v-if="!loading && !searchOpen">
+
+        <!-- HOME VIEW -->
+        <div v-if="currentView === 'home'">
+            <!-- SLIDER -->
+            <div class="hero-slider" v-if="sliderItems.length > 0">
+                <div class="slide-item" v-for="(item, index) in sliderItems" :key="item.id" 
+                     :class="{ active: currentSlide === index }"
+                     :style="{ backgroundImage: 'url(' + item.poster_url + ')' }">
+                    <div class="hero-overlay">
+                        <div class="hero-cat-tag">{{ item.type === 'movie' ? 'MOVIES' : 'TV SHOWS' }}</div>
+                        <div class="hero-title">{{ item.title }}</div>
+                        <div style="display:flex; gap:10px; align-items:center;" @click="openDetails(item)">
+                            <button class="big-play-btn"><i class="fa-solid fa-play"></i></button>
+                            <span style="font-weight:600">Watch Now</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="dots-container">
+                    <div class="dot" v-for="(dot, idx) in sliderItems" :key="idx" :class="{ active: currentSlide === idx }"></div>
+                </div>
+            </div>
+
+            <!-- CATEGORIES -->
+            <div v-for="cat in categories" :key="cat.id">
+                <div class="section" v-if="getCategoryContent(cat.name).length > 0">
+                    <div class="section-header"><span class="section-title">{{ cat.name }}</span></div>
+                    <div class="rail">
+                        <div class="card-wrapper" v-for="item in getCategoryContent(cat.name)" :key="item.id" @click="openDetails(item)">
+                            <div class="card-img-box"><img :src="item.poster_url" @error="imgError"><div class="rating-badge"><i class="fa-solid fa-star"></i> 8.5</div></div>
+                            <div class="card-title">{{ item.title }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="section" v-if="getCategoryChannels(cat.name).length > 0">
+                    <div class="section-header"><span class="section-title">{{ cat.name }} Channels</span></div>
+                    <div class="rail">
+                        <div class="card-wide-wrapper" v-for="ch in getCategoryChannels(cat.name)" :key="ch.id" @click="playVideo(ch.stream_url)">
+                            <div class="card-wide-box">
+                                <div style="position:absolute;top:4px;left:4px;background:red;color:white;font-size:0.5rem;padding:2px 4px;border-radius:2px;font-weight:bold;">LIVE</div>
+                                <img :src="ch.logo_url" @error="imgError">
+                            </div>
+                            <div class="card-title">{{ ch.name }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LATEST FALLBACK -->
+            <div class="section" v-if="categories.length === 0 && movies.length > 0">
+                <div class="section-header"><span class="section-title">Latest Movies</span></div>
+                <div class="rail">
+                    <div class="card-wrapper" v-for="m in movies" :key="m.id" @click="openDetails(m)">
+                        <div class="card-img-box"><img :src="m.poster_url" @error="imgError"></div>
+                        <div class="card-title">{{ m.title }}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- PLAYLISTS -->
+            <div class="section" v-if="playlists.length > 0">
+                <div class="section-header"><span class="section-title">Premium Playlists</span></div>
+                <div class="rail">
+                    <div class="card-wrapper" v-for="pl in playlists" :key="pl.id" @click="playPlaylist(pl.url)">
+                        <div class="card-img-box" style="background:#111;display:flex;align-items:center;justify-content:center;color:var(--primary);font-weight:bold;font-size:0.8rem;text-align:center;">
+                            {{ pl.name }}
+                        </div>
+                        <div class="card-title">{{ pl.name }}</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- PLACEHOLDER VIEWS -->
+        <div v-if="currentView === 'subscription'" class="placeholder-page"><i class="fa-solid fa-layer-group" style="font-size:3rem;"></i><br>Plans</div>
+        <div v-if="currentView === 'saved'" class="placeholder-page"><i class="fa-regular fa-bookmark" style="font-size:3rem;"></i><br>Saved</div>
+        <div v-if="currentView === 'menu'" class="placeholder-page"><i class="fa-solid fa-bars" style="font-size:3rem;"></i><br>Menu</div>
+    </div>
+
+    <!-- DETAILS MODAL -->
+    <div class="full-modal" v-if="selectedItem">
+        <i class="fa-solid fa-arrow-left" style="position:absolute; top:20px; left:20px; font-size:1.5rem; z-index:10; background:rgba(0,0,0,0.6); padding:10px; border-radius:50%; color:white; cursor:pointer;" @click="selectedItem = null"></i>
+        <img :src="selectedItem.poster_url" style="width:100%; height:45vh; object-fit:cover;">
+        <div style="padding:20px;">
+            <h1 style="font-size:1.8rem; font-weight:800;">{{ selectedItem.title }}</h1>
+            <div style="color:var(--primary); font-size:0.9rem; margin:10px 0;">{{ selectedItem.category }}</div>
+            <p style="color:#bbb; line-height:1.5;">{{ selectedItem.description }}</p>
+            
+            <!-- Play Button -->
+            <button v-if="selectedItem.type === 'movie'" class="big-play-btn" style="width:100%; height:50px; border-radius:8px; gap:10px; margin-top:20px" @click="playVideo(selectedItem.video_url)">
+                <i class="fa-solid fa-play"></i> Watch Movie
+            </button>
+
+            <!-- Episodes -->
+            <div v-if="selectedItem.type === 'tvshow'" style="margin-top:20px;">
+                <h3>Episodes</h3>
+                <div v-for="ep in selectedItem.episodes" class="episode-item" @click="playVideo(ep.u)">
+                    <span style="font-weight:bold; color:gray; width:30px;">{{ ep.e }}</span>
+                    <div style="flex:1"><div>{{ ep.t || 'Episode ' + ep.e }}</div></div>
+                    <i class="fa-solid fa-play" style="color:var(--primary)"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM NAV -->
+    <div class="bottom-nav">
+        <div class="nav-item" :class="{ active: currentView === 'home' }" @click="currentView = 'home'"><i class="fa-solid fa-house"></i><span>Home</span></div>
+        <div class="nav-item" :class="{ active: currentView === 'subscription' }" @click="currentView = 'subscription'"><i class="fa-solid fa-layer-group"></i><span>Sub</span></div>
+        <div class="nav-item" :class="{ active: currentView === 'saved' }" @click="currentView = 'saved'"><i class="fa-regular fa-bookmark"></i><span>Saved</span></div>
+        <div class="nav-item" :class="{ active: currentView === 'menu' }" @click="currentView = 'menu'"><i class="fa-solid fa-bars"></i><span>Menu</span></div>
+    </div>
+
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyCdcLb6eD7IsqHyMDBTNFDY1QCr9ERQch0",
+        projectId: "zhaorv",
+        appId: "1:974011347762:web:6e0ecafe1b63e64a36dd2b"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const app = Vue.createApp({
+        data() {
+            return {
+                loading: true, currentView: 'home', searchOpen: false, searchQuery: '', hasUpdate: false,
+                categories: [], movies: [], series: [], channels: [], playlists: [], sliderItems: [], currentSlide: 0,
+                selectedItem: null
+            }
+        },
+        computed: {
+            filteredMovies() { return this.movies.filter(m => m.title.toLowerCase().includes(this.searchQuery.toLowerCase())); },
+            filteredSeries() { return this.series.filter(s => s.title.toLowerCase().includes(this.searchQuery.toLowerCase())); },
+            filteredChannels() { return this.channels.filter(c => c.name.toLowerCase().includes(this.searchQuery.toLowerCase())); },
+            filteredPlaylists() { return this.playlists.filter(p => p.name.toLowerCase().includes(this.searchQuery.toLowerCase())); }
+        },
+        mounted() {
+            this.loadData();
+            this.checkUpdates();
+        },
+        methods: {
+            async loadData() {
+                try {
+                    const catSnap = await db.collection('categories').get();
+                    this.categories = catSnap.docs.map(d => ({id:d.id, ...d.data()}));
+
+                    const mSnap = await db.collection('videos').where('type','==','movie').where('active', '==', true).get();
+                    this.movies = mSnap.docs.map(d => ({id:d.id, ...d.data()}));
+                    
+                    const sSnap = await db.collection('videos').where('type','==','tvshow').where('active', '==', true).get();
+                    this.series = sSnap.docs.map(d => ({id:d.id, ...d.data()}));
+                    
+                    const cSnap = await db.collection('liveTV').get();
+                    this.channels = cSnap.docs.map(d => ({id:d.id, ...d.data()}));
+                    
+                    const pSnap = await db.collection('playlists').get();
+                    this.playlists = pSnap.docs.map(d => ({id:d.id, ...d.data()}));
+                    
+                    this.sliderItems = [...this.movies.slice(0,5), ...this.series.slice(0,5)];
+                    setInterval(() => { this.currentSlide = (this.currentSlide + 1) % this.sliderItems.length; }, 5000);
+                } catch(e) { console.error(e); } 
+                finally { this.loading = false; }
+            },
+            
+            getCategoryContent(catName) { return [...this.movies, ...this.series].filter(i => i.category === catName); },
+            getCategoryChannels(catName) { return this.channels.filter(ch => ch.category === catName); },
+            
+            async checkUpdates() {
+                try {
+                    const doc = await db.collection('app_settings').doc('version_control').get();
+                    if(doc.exists && parseFloat(doc.data().latest_version) > 1.0) this.hasUpdate = true;
+                } catch(e) { console.log('Update check failed'); }
+            },
+
+            openDetails(item) { this.selectedItem = item; },
+
+            playVideo(url) {
+                if (!url) return alert('No URL provided');
+                window.location.href = 'player.html?url=' + encodeURIComponent(url);
+            },
+
+            // ADDED THIS FUNCTION
+            playPlaylist(url) {
+                this.playVideo(url);
+            },
+            
+            triggerAndroid(action) {
+                if(typeof window.Android !== 'undefined') {
+                    window.Android.performAction(action);
+                } else {
+                    console.log("Triggered: " + action);
+                }
+            },
+
+            imgError(e) { e.target.src="https://via.placeholder.com/105x155/222/00e600?text=WIE"; }
+        }
+    }).mount('#app');
+</script>
+
+<!-- SERVICE WORKER REGISTRATION (REQUIRED FOR PWA) -->
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./service-worker.js')
+            .then(reg => console.log('SW Registered', reg))
+            .catch(err => console.log('SW Fail', err));
+        });
+    }
+</script>
+</body>
+</html>
